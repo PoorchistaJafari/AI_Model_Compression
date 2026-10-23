@@ -407,3 +407,281 @@ The baseline ResNet-18 contains approximately 11.22 million parameters and occup
 Future experiments will compare model size, parameter count, predictive performance, and inference speed against this baseline. The initial evaluation throughput is a reference measurement rather than a fully controlled latency benchmark.
 
 The validation set is used for model selection and development. The test set remains reserved for final evaluation after the compression experiments and evaluation procedure have been finalized.
+
+## Initial Pruning Experiment — 20% Global Magnitude Pruning
+
+### Method
+
+Global unstructured magnitude pruning was applied to the weights of convolutional layers and the final fully connected classifier. The 20% pruning target was applied across the selected weights. Pruning was then made permanent using PyTorch's pruning removal utility.
+
+### Validation Results
+
+| Metric              | Baseline | Pruned Model |
+| ------------------- | -------: | -----------: |
+| Validation accuracy |   34.50% |       34.64% |
+| Validation Macro-F1 |   0.3177 |       0.3196 |
+| Target sparsity     |       0% |       20.00% |
+
+### Initial Interpretation
+
+The pruned model achieved 34.64% validation accuracy and a Macro-F1 score of 0.3196. Compared with the baseline, accuracy increased by 0.14 percentage points and Macro-F1 increased by 0.0019.
+
+These small differences should not be interpreted as conclusive evidence that pruning improves predictive performance. The experiment is preliminary and requires additional measurements, including checkpoint size and inference performance.
+
+The measured 20% sparsity applies only to the selected convolutional and classifier weights. It does not mean that the entire model has 20% of its parameters removed or that the saved checkpoint will be 20% smaller.
+
+## Pruning Experiment — 20% Global Magnitude Pruning
+
+### Method
+
+Global unstructured magnitude pruning was applied to the weights of all convolutional layers and the final fully connected classifier. The target pruning amount was 20% of the selected weights. The pruning masks were then made permanent using PyTorch's pruning removal utility, and the resulting model weights were saved to a separate checkpoint.
+
+### Results
+
+| Metric                     |   Baseline | Pruned Model |
+| -------------------------- | ---------: | -----------: |
+| Validation accuracy        |     34.50% |       34.64% |
+| Validation Macro-F1        |     0.3177 |       0.3196 |
+| Validation loss            |     2.5665 |       2.5577 |
+| Selected-weight sparsity   |         0% |       20.00% |
+| Checkpoint size (bytes)    | 44,959,307 |   44,959,435 |
+| Checkpoint size (MB)       |      44.96 |        44.96 |
+| Evaluation time (seconds)  |      37.47 |        35.13 |
+| Throughput (images/second) |     133.43 |       142.33 |
+
+### Interpretation and Limitations
+
+The pruning procedure successfully set 2,242,086 of 11,210,432 selected weights to zero, achieving 20.00% sparsity among the selected convolutional and classifier weights.
+
+The pruned model achieved 34.64% validation accuracy, compared with 34.50% for the baseline. This small difference does not establish that pruning improves generalization.
+
+The checkpoint size increased by 128 bytes rather than decreasing. This is expected because the pruned weights were saved in a dense tensor representation, where zero-valued weights still occupy storage.
+
+The observed throughput was higher for the pruned model in this single evaluation run. However, this measurement is not sufficient to establish a reliable inference speed improvement. Repeated, controlled benchmarking and an appropriate sparse or compressed representation are required to evaluate practical efficiency gains.
+
+The current experiment demonstrates weight sparsification, but it does not yet demonstrate a reduction in dense checkpoint size or a verified speedup.
+
+### Saved Artifact
+
+- Checkpoint: `models/resnet18_pruned_20.pth`
+
+## Pruning Experiment — 40% Global Magnitude Pruning
+
+### Method
+
+Global unstructured L1 magnitude pruning was applied to the
+convolutional-layer weights and final fully connected layer weights.
+The pruning experiment started from the original trained baseline
+checkpoint to ensure a fair comparison with the 20% pruning experiment.
+
+### Results
+
+| Metric               |               Result |
+| -------------------- | -------------------: |
+| Validation images    |                5,000 |
+| Target pruning ratio |                  40% |
+| Selected weights     |           11,210,432 |
+| Zero weights         |            4,484,173 |
+| Measured sparsity    |               40.00% |
+| Validation loss      |               2.5371 |
+| Validation accuracy  |               34.36% |
+| Validation Macro-F1  |               0.3219 |
+| Evaluation time      |        34.92 seconds |
+| Throughput           | 143.19 images/second |
+| Checkpoint size      |             44.96 MB |
+
+### Interpretation
+
+The model achieved 40.00% sparsity among the selected weights.
+Validation accuracy was 0.14 percentage points lower than the
+baseline, while Macro-F1 increased from 0.3177 to 0.3219 and
+validation loss decreased from 2.5665 to 2.5371.
+
+The checkpoint size remained approximately 44.96 MB because the
+zero-valued weights were stored in the standard dense format.
+The observed evaluation throughput should not be interpreted as
+proof of a speedup because the timing measurements have not yet
+been repeated under controlled conditions.
+
+These results are preliminary and are based on the validation set.
+The test set remains reserved for final evaluation.
+
+## Pruning Results Visualization
+
+The figure `figures/pruning_comparison.png` compares baseline,
+20% global magnitude pruning, and 40% global magnitude pruning
+using validation accuracy, Macro-F1, and checkpoint size.
+
+The results show that validation accuracy remained close to the
+baseline across both pruning levels. Macro-F1 increased slightly
+in these individual runs, but repeated experiments are needed
+before drawing firm conclusions.
+
+Checkpoint sizes remained approximately 44.96 MB because pruning
+produced zero-valued weights without changing the dense storage
+format. Therefore, sparsity alone did not reduce the saved
+checkpoint size.
+
+## Quantization Experiment — Dynamic INT8
+
+### Method
+
+Dynamic INT8 quantization was applied to the supported Linear
+layer of the trained ResNet-18 model using PyTorch.
+The original FP32 baseline checkpoint was used as the starting point.
+
+Only the final fully connected layer was quantized. Convolutional
+layers remained in floating-point format.
+
+### Results
+
+| Metric              |   FP32 Baseline |    Dynamic INT8 |
+| ------------------- | --------------: | --------------: |
+| Validation accuracy |          34.50% |          34.48% |
+| Validation Macro-F1 |          0.3177 |          0.3175 |
+| Validation loss     |          2.5665 |          2.5653 |
+| Evaluation time     |         37.47 s |         34.14 s |
+| Throughput          | 133.43 images/s | 146.47 images/s |
+| Checkpoint size     |        44.96 MB |        44.81 MB |
+
+Checkpoint size decreased by approximately 0.34%, while validation
+accuracy decreased by 0.02 percentage points.
+
+### Interpretation and Limitations
+
+The small reduction in checkpoint size is expected because only
+the final Linear layer was quantized; most model parameters belong
+to convolutional layers that remained in FP32.
+
+The single-run timing results are preliminary and do not establish
+a reliable speedup. Repeated, controlled benchmarking is required.
+
+This experiment demonstrates that dynamic quantization of the final
+classifier alone is insufficient for substantial compression of
+this ResNet-18 model. The test set remains reserved for final evaluation.
+
+## Static INT8 Quantization Experiment
+
+### Method
+
+FX graph-mode static INT8 quantization was applied to the trained
+ResNet-18 model using the oneDNN quantization backend.
+
+The model was calibrated using 1,024 training images and evaluated
+on the 5,000-image validation set. The original FP32 checkpoint was
+used as the baseline.
+
+### Results
+
+| Metric                     |   FP32 Baseline |     Static INT8 |
+| -------------------------- | --------------: | --------------: |
+| Validation loss            |          2.5665 |          2.5673 |
+| Validation accuracy        |          34.50% |          34.36% |
+| Validation Macro-F1        |          0.3177 |          0.3158 |
+| Evaluation time            |         37.47 s |          8.85 s |
+| Throughput                 | 133.43 images/s | 564.89 images/s |
+| Serialized state-dict size |        44.96 MB |        11.35 MB |
+
+The serialized state-dict size decreased by approximately 74.75%.
+Validation accuracy decreased by 0.14 percentage points.
+
+### Interpretation and Limitations
+
+Static INT8 quantization converted supported convolutional and
+linear operations to quantized operations. The measured validation
+accuracy remained close to the FP32 baseline, while the serialized
+weight file became substantially smaller.
+
+The observed timing improvement is preliminary because each model
+was measured in a single run. Repeated controlled benchmarks are
+needed for a reliable performance comparison.
+
+The reported quantized file size refers to the serialized state
+dictionary, not necessarily a complete standalone deployment artifact.
+The test set remains reserved for final evaluation.
+
+## Combined Experiment — 20% Pruning + Static INT8 Quantization
+
+### Method
+
+The experiment started from the trained FP32 baseline.
+Global unstructured L1 magnitude pruning was applied at a target
+sparsity of 20% to convolutional weights and the final classifier
+weights. Static FX graph-mode INT8 quantization was then applied
+using the oneDNN backend.
+
+Calibration used 1,024 training images. Evaluation used the
+5,000-image validation set.
+
+### Results
+
+| Metric                     |   FP32 Baseline |     Static INT8 | Pruning 20% + Static INT8 |
+| -------------------------- | --------------: | --------------: | ------------------------: |
+| Validation accuracy        |          34.50% |          34.36% |                    34.48% |
+| Validation Macro-F1        |          0.3177 |          0.3158 |                    0.3187 |
+| Validation loss            |          2.5665 |          2.5673 |                    2.5577 |
+| Evaluation time            |         37.47 s |          8.85 s |                    9.06 s |
+| Throughput                 | 133.43 images/s | 564.89 images/s |           552.16 images/s |
+| Serialized state-dict size |        44.96 MB |        11.35 MB |                  11.36 MB |
+
+The combined model achieved 20.00% sparsity among the selected
+weights and a measured state-dict size reduction of 74.74%
+relative to the FP32 baseline.
+
+### Interpretation and Limitations
+
+The combined model retained validation accuracy close to the
+baseline. However, its serialized state dictionary was slightly
+larger than that of the Static INT8 model alone. Thus, this
+experiment did not demonstrate an additional storage benefit
+from applying 20% pruning before quantization.
+
+Timing results are preliminary because each model was measured
+in a single run. Repeated controlled benchmarks are required.
+The reported file sizes refer to serialized state dictionaries,
+not necessarily complete standalone deployment artifacts.
+The test set remains reserved for final evaluation.
+
+## Overall Compression Comparison
+
+The figure `figures/compression_comparison.png` compares the
+baseline FP32 model, two pruning configurations, dynamic INT8,
+static INT8, and the combined 20% pruning plus static INT8 model.
+
+Across these experiments, validation accuracy remained close to
+34.5%. Static INT8 quantization reduced the serialized state-dict
+size from approximately 44.96 MB to 11.35 MB, a reduction of
+about 74.75%.
+
+Combining 20% pruning with static INT8 resulted in a state-dict
+size of approximately 11.36 MB. This did not provide an additional
+storage reduction compared with static INT8 alone.
+
+These findings are preliminary and based on individual validation
+runs. Repeated benchmarking and final evaluation on the held-out
+test set are still required.
+
+## Model Serialization and Reload Test
+
+### Objective
+
+Verify that the static INT8 model can be reconstructed, loaded from its saved state dictionary, and used for inference.
+
+### Results
+
+- PyTorch version: 2.14.1+cpu
+- Quantized state_dict size: 11,353,661 bytes
+- Full FX model test file size: 11,358,655 bytes
+- Output shape: (2, 100)
+- Maximum output difference after reconstruction and state_dict loading: 0.00000000
+- Output comparison: PASSED
+
+### Interpretation
+
+The quantized model was successfully reconstructed, and its saved state dictionary was loaded into the reconstructed graph. The outputs matched exactly for the tested random input batch.
+
+The full-model serialization experiment using torch.save and torch.load(weights_only=False) failed during deserialization in the current PyTorch environment. Therefore, full-object serialization and deserialization have not been validated successfully. The successful state_dict reconstruction test provides a reproducible alternative.
+
+### Limitations
+
+The reload test used random calibration inputs and a random inference batch. It validates serialization and output consistency for this test, not model accuracy on CIFAR-100. The full-model test file is an experimental artifact, not a confirmed deployment package.

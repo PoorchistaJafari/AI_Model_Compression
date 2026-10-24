@@ -1,0 +1,50 @@
+Repeated CPU Inference Benchmark
+CPU threads: 2
+Quantization backend: onednn
+Warm-up runs: 10
+Repeats: 5
+Maximum batches per repeat: 100
+Calibration images: 1024
+Reported latency and throughput are medians across repeats.
+
+Model: Extended Baseline FP32
+Batch size: 1
+Median latency: 17.432 ms/image
+Median throughput: 57.37 images/second
+Latency per repeat (ms/image): 16.976, 17.896, 17.029, 17.432, 17.453
+Throughput per repeat (images/second): 58.91, 55.88, 58.72, 57.37, 57.30
+
+Model: Extended Baseline FP32
+Batch size: 32
+Median latency: 9.802 ms/image
+Median throughput: 102.02 images/second
+Latency per repeat (ms/image): 7.811, 10.225, 9.864, 9.802, 9.518
+Throughput per repeat (images/second): 128.02, 97.80, 101.38, 102.02, 105.06
+
+Model: Static INT8
+Batch size: 1
+Median latency: 11.325 ms/image
+Median throughput: 88.30 images/second
+Latency per repeat (ms/image): 11.702, 10.944, 11.325, 12.025, 11.275
+Throughput per repeat (images/second): 85.45, 91.38, 88.30, 83.16, 88.69
+
+Model: Static INT8
+Batch size: 32
+Median latency: 2.284 ms/image
+Median throughput: 437.81 images/second
+Latency per repeat (ms/image): 2.328, 2.238, 2.284, 2.251, 2.301
+Throughput per repeat (images/second): 429.47, 446.90, 437.81, 444.22, 434.54
+
+Model: Pruning 20% + Static INT8
+Batch size: 1
+Median latency: 11.554 ms/image
+Median throughput: 86.55 images/second
+Latency per repeat (ms/image): 11.554, 10.814, 11.363, 11.899, 11.703
+Throughput per repeat (images/second): 86.55, 92.47, 88.01, 84.04, 85.45
+
+Model: Pruning 20% + Static INT8
+Batch size: 32
+Median latency: 2.293 ms/image
+Median throughput: 436.19 images/second
+Latency per repeat (ms/image): 2.487, 2.293, 2.254, 2.282, 2.381
+Throughput per repeat (images/second): 402.07, 436.19, 443.72, 438.15, 420.05

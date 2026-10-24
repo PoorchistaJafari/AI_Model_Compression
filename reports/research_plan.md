@@ -685,3 +685,338 @@ The full-model serialization experiment using torch.save and torch.load(weights_
 ### Limitations
 
 The reload test used random calibration inputs and a random inference batch. It validates serialization and output consistency for this test, not model accuracy on CIFAR-100. The full-model test file is an experimental artifact, not a confirmed deployment package.
+
+## Extended Baseline Training — Two Additional Epochs
+
+### Objective
+
+Investigate whether additional training improves the validation performance of the existing ResNet-18 baseline on CIFAR-100.
+
+### Method
+
+The model weights from the original three-epoch baseline checkpoint were loaded, and training continued for two additional epochs. A new SGD optimizer was initialized; the optimizer state from the original run was not available.
+
+The original checkpoint was preserved. The best model from the additional training run was saved separately as `models/resnet18_baseline_extended.pth`, based on validation accuracy.
+
+### Results
+
+| Training stage             | Training accuracy | Validation loss | Validation accuracy |
+| -------------------------- | ----------------: | --------------: | ------------------: |
+| Original baseline, epoch 3 |            36.28% |          2.5665 |              34.50% |
+| Additional epoch 1         |            45.25% |          2.3520 |              39.00% |
+| Additional epoch 2         |            53.74% |          2.3444 |              38.84% |
+
+Additional training time:
+
+- Epoch 1: 21.08 minutes
+- Epoch 2: 27.17 minutes
+
+### Interpretation
+
+The best validation accuracy increased from 34.50% to 39.00%, an improvement of 4.50 percentage points. Validation loss also decreased compared with the original baseline.
+
+Training accuracy continued to increase during the second additional epoch, while validation accuracy decreased slightly from 39.00% to 38.84%. This may indicate the beginning of overfitting, but two additional epochs are insufficient to establish that conclusion.
+
+### Limitations
+
+The results are based on the validation subset. The held-out test set has not been used. Further controlled experiments are needed before drawing conclusions about generalization or treating this model as the final baseline for compression comparisons.
+
+## Extended Baseline — 20% Global Magnitude Pruning
+
+### Objective
+
+Evaluate the effect of applying 20% global unstructured magnitude pruning to the extended ResNet-18 baseline.
+
+### Method
+
+The extended baseline checkpoint, `models/resnet18_baseline_extended.pth`, was loaded. Global L1 unstructured pruning was applied to the convolutional weights and final fully connected layer weights. Pruning was then made permanent by removing the pruning reparameterization.
+
+The pruned model was evaluated on the 5,000-image validation subset and saved as `models/resnet18_extended_pruned_20.pth`.
+
+### Results
+
+- Target pruning ratio: 20%
+- Selected weights: 11,210,432
+- Zero weights after pruning: 2,242,086
+- Measured sparsity: 20.00%
+- Validation loss: 2.3509
+- Validation accuracy: 38.84%
+- Validation Macro-F1: 0.3764
+- Evaluation time: 37.47 seconds
+- Throughput: 133.44 images/second
+- Serialized state-dict size: 44,960,715 bytes (44.96 MB)
+
+### Interpretation
+
+Validation accuracy decreased from 39.00% for the extended baseline to 38.84% after pruning, a reduction of 0.16 percentage points. The validation loss changed from 2.3520 to 2.3509.
+
+The serialized state-dict size remained approximately 44.96 MB. This is expected for unstructured pruning when zero-valued weights are stored in dense tensors.
+
+### Limitations
+
+The evaluation used a single validation run. Timing measurements are preliminary and should not be interpreted as evidence of a reliable speedup. The held-out test set remains reserved for final evaluation.
+
+## Extended Baseline — 40% Global Magnitude Pruning
+
+### Objective
+
+Evaluate the effect of applying 40% global unstructured magnitude pruning to the extended ResNet-18 baseline.
+
+### Method
+
+The extended baseline checkpoint, `models/resnet18_baseline_extended.pth`, was loaded. Global L1 unstructured pruning was applied to the convolutional weights and final fully connected layer weights. Pruning was then made permanent by removing the pruning reparameterization.
+
+The pruned model was evaluated on the 5,000-image validation subset and saved as `models/resnet18_extended_pruned_40.pth`.
+
+### Results
+
+- Target pruning ratio: 40%
+- Selected weights: 11,210,432
+- Zero weights after pruning: 4,484,173
+- Measured sparsity: 40.00%
+- Validation loss: 2.3791
+- Validation accuracy: 38.24%
+- Validation Macro-F1: 0.3743
+- Evaluation time: 38.40 seconds
+- Throughput: 130.22 images/second
+- Serialized state-dict size: 44,960,715 bytes (44.96 MB)
+
+### Interpretation
+
+Validation accuracy decreased from 39.00% for the extended baseline to 38.24% after 40% pruning, a reduction of 0.76 percentage points. The 40% pruning result also had lower validation accuracy than the 20% pruning result of 38.84%.
+
+The serialized state-dict size remained approximately 44.96 MB. This is expected for unstructured pruning when zero-valued weights are stored in dense tensors.
+
+### Limitations
+
+The evaluation used a single validation run. Timing measurements are preliminary and should not be interpreted as evidence of a reliable speedup. The model was not fine-tuned after pruning, and the held-out test set remains reserved for final evaluation.
+
+## Extended Baseline — Static INT8 Quantization
+
+### Objective
+
+Evaluate static INT8 quantization on the extended ResNet-18 baseline to measure its effect on validation performance and serialized model size.
+
+### Method
+
+The extended baseline checkpoint, `models/resnet18_baseline_extended.pth`, was loaded. FX graph-mode static quantization was prepared using the oneDNN backend and calibrated with 1,024 training images. The converted model was evaluated on the 5,000-image validation subset.
+
+The quantized state dictionary was saved as `models/resnet18_extended_static_int8.pth`.
+
+### Results
+
+- Quantization backend: oneDNN
+- Calibration images: 1,024
+- Validation images: 5,000
+- Validation loss: 2.3513
+- Validation accuracy: 38.88%
+- Validation Macro-F1: 0.3762
+- Evaluation time: 12.21 seconds
+- Throughput: 409.62 images/second
+- Extended FP32 baseline size: 44,960,587 bytes
+- Quantized state-dict size: 11,355,075 bytes (11.36 MB)
+- Measured state-dict size reduction: 74.74%
+
+### Interpretation
+
+Validation accuracy decreased from 39.00% for the extended FP32 baseline to 38.88% after static INT8 quantization, a reduction of 0.12 percentage points. Validation loss remained close to the baseline value.
+
+The serialized state-dict size decreased by 74.74%, from approximately 44.96 MB to 11.36 MB. This demonstrates substantial storage reduction with little observed change in validation accuracy.
+
+### Limitations
+
+The reported file size refers to the serialized state dictionary, not necessarily a complete standalone deployment package. Evaluation timing comes from a single run and should be treated as preliminary. A controlled repeated benchmark is needed before making reliable speed comparisons.
+
+The current FX quantization APIs emitted deprecation warnings in the installed PyTorch environment. The experiment completed successfully, but future compatibility may require migration to newer quantization APIs.
+
+The held-out test set remains reserved for final evaluation.
+
+## Extended Baseline — 20% Pruning + Static INT8 Quantization
+
+### Objective
+
+Evaluate whether applying 20% global magnitude pruning before static INT8 quantization provides benefits beyond static INT8 quantization alone.
+
+### Method
+
+The extended ResNet-18 FP32 checkpoint was loaded. Global unstructured L1 magnitude pruning was applied to convolutional weights and the final fully connected layer, with a target pruning amount of 20%. Pruning was made permanent before FX graph-mode static INT8 quantization.
+
+Quantization used the oneDNN backend and calibration on 1,024 images from the training subset. Evaluation used the project's fixed 5,000-image validation subset. The official 10,000-image CIFAR-100 test set was not used in this corrected run.
+
+### Results
+
+| Metric              | Extended FP32 Baseline | 20% Pruning + Static INT8 |
+| ------------------- | ---------------------: | ------------------------: |
+| Validation images   |                  5,000 |                     5,000 |
+| Validation loss     |                 2.3520 |                    2.3498 |
+| Validation accuracy |                 39.00% |                    38.80% |
+| Validation Macro-F1 |                 0.3767 |                    0.3768 |
+| Evaluation time     |          38.67 seconds |              9.64 seconds |
+| Throughput          |   129.29 images/second |      518.57 images/second |
+| Checkpoint size     |       44,960,587 bytes |          11,356,617 bytes |
+
+- Measured pruning sparsity before quantization: 20.00%
+- Calibration images: 1,024
+- Checkpoint size reduction relative to the extended FP32 baseline: 74.74%
+- Accuracy change relative to the extended FP32 baseline: -0.20 percentage points
+
+### Comparison with Static INT8 Alone
+
+Static INT8 alone achieved 38.88% validation accuracy, a Macro-F1 of 0.3762, a checkpoint size of 11,355,075 bytes, and measured throughput of 409.62 images/second in its earlier run.
+
+The combined model achieved 38.80% validation accuracy and a Macro-F1 of 0.3768. Its checkpoint was 1,542 bytes larger than the static INT8-only checkpoint. The combined run showed higher throughput, but this difference is preliminary because the timing results come from single runs and may be affected by measurement variability.
+
+### Interpretation
+
+Static INT8 quantization accounts for most of the observed checkpoint size reduction. Applying 20% magnitude pruning before quantization did not provide additional meaningful storage savings and produced a small decrease in validation accuracy compared with static INT8 alone.
+
+Although the combined run recorded higher throughput, repeated controlled benchmarking is required before concluding that pruning improves inference speed.
+
+### Limitations
+
+Pruning produced zeros in dense model tensors. This does not guarantee sparse storage or sparse-kernel acceleration after quantization. The reported checkpoint size refers to the serialized state dictionary, not a complete deployment package.
+
+The results are based on the fixed validation subset. The official test set remains reserved for final evaluation. The timing measurements are preliminary and should be repeated under controlled conditions.
+
+The installed FX quantization APIs emitted deprecation warnings, but the experiment completed successfully.
+
+## Repeated CPU Inference Benchmark
+
+### Objective
+
+Compare CPU inference performance of the extended FP32 baseline, static INT8 model, and combined 20% pruning + static INT8 model.
+
+### Method
+
+The models were benchmarked on CPU using two batch sizes: 1 and 32. Each benchmark included 10 warm-up runs and 5 measured repetitions. The median latency and throughput were reported for each configuration.
+
+The benchmark used 2 CPU threads and the oneDNN quantization backend. Static INT8 models were reconstructed using FX graph-mode quantization and calibrated with 1,024 images from the training subset.
+
+Each measured repetition processed up to 100 batches from the validation DataLoader. Therefore, the reported timing includes data-loading overhead and should not be interpreted as pure model-only inference latency.
+
+### Results — Latest Benchmark Session
+
+| Model                     | Batch Size | Median Latency (ms/image) | Median Throughput (images/second) |
+| ------------------------- | ---------: | ------------------------: | --------------------------------: |
+| Extended Baseline FP32    |          1 |                    17.432 |                             57.37 |
+| Static INT8               |          1 |                    11.325 |                             88.30 |
+| 20% Pruning + Static INT8 |          1 |                    11.554 |                             86.55 |
+| Extended Baseline FP32    |         32 |                     9.802 |                            102.02 |
+| Static INT8               |         32 |                     2.284 |                            437.81 |
+| 20% Pruning + Static INT8 |         32 |                     2.293 |                            436.19 |
+
+### Interpretation
+
+In the latest benchmark session, static INT8 quantization achieved higher throughput than the FP32 baseline at both batch sizes.
+
+At batch size 1, static INT8 throughput was approximately 1.54 times the FP32 throughput. At batch size 32, it was approximately 4.29 times the FP32 throughput.
+
+The combined pruning + INT8 model did not show a consistent speed advantage over static INT8 alone. In the latest session, its throughput was slightly lower than static INT8 at both batch sizes.
+
+### Limitations
+
+The results are preliminary and varied between benchmark sessions. CPU load, thermal conditions, and data-loading overhead may affect the measurements. More controlled model-only timing would be needed for a precise inference-latency comparison.
+
+The benchmark reports performance on the validation pipeline, not final test-set performance. The official CIFAR-100 test set remains reserved for final evaluation.
+
+The installed FX quantization APIs emitted deprecation warnings. These warnings did not stop the benchmark from completing.
+
+## Final Evaluation on the Official CIFAR-100 Test Set
+
+### Experimental Setup
+
+The three selected checkpoints were evaluated on the official CIFAR-100 test set containing 10,000 images. The test set was kept separate from training and quantization calibration. Experiments were performed on CPU using two PyTorch threads.
+
+### Results
+
+| Model                     | Test Accuracy (%) | Macro-F1 | Checkpoint Size (MB) | Throughput (images/s) |
+| ------------------------- | ----------------: | -------: | -------------------: | --------------------: |
+| Extended FP32 baseline    |             38.94 |   0.3788 |                44.96 |                125.08 |
+| Static INT8               |             38.66 |   0.3759 |                11.36 |                465.29 |
+| 20% Pruning + Static INT8 |             38.71 |   0.3765 |                11.36 |                470.11 |
+
+### Analysis
+
+Static INT8 quantization reduced the serialized checkpoint size by approximately 74.7% compared with the extended FP32 baseline. Test accuracy decreased by 0.28 percentage points, while measured throughput increased by approximately 3.72 times.
+
+The combined 20% pruning and INT8 model achieved 38.71% test accuracy and 470.11 images per second. Compared with INT8 alone, the combined model was only marginally faster in this run and had a slightly larger checkpoint. These results do not establish a meaningful practical advantage for adding unstructured pruning to INT8 quantization.
+
+### Limitations
+
+Throughput measurements depend on the hardware, software environment, batch size, and measurement procedure. The observed difference between the two INT8 models is small and should not be interpreted as a reliable speed advantage without repeated controlled benchmarks.
+
+## Class-Level Error Analysis
+
+### Overall Results
+
+The extended FP32 baseline achieved 38.94% accuracy on the official CIFAR-100 test set.
+
+Per-class accuracy was calculated for all 100 classes. The lowest accuracies included otter (2%), squirrel (3%), turtle (4%), crab (9%), and raccoon (10%).
+
+### Common Misclassifications
+
+The confusion matrix revealed several frequent errors:
+
+- Otter was predicted as seal and beaver 12 times each.
+- Squirrel was predicted as porcupine 9 times.
+- Turtle was predicted as shark, ray, and dolphin 7 times each.
+- Crab was predicted as lobster 7 times.
+- Raccoon was predicted as wolf 9 times.
+
+### Interpretation
+
+These results show that the baseline model performs unevenly across CIFAR-100 classes. Some animal categories are particularly difficult for the model to distinguish. The confusion matrix helps identify specific class pairs associated with errors.
+
+These observations describe model behavior; they do not establish the underlying cause of the errors.
+
+### Saved Analysis Artifacts
+
+- `reports/class_error_analysis.csv`: per-class accuracy for all 100 classes.
+- `figures/class_accuracy_worst15.png`: visualization of the 15 classes with the lowest accuracy.
+- `reports/confusion_matrix.csv`: full confusion matrix.
+- `figures/confusion_matrix.png`: confusion matrix visualization.
+
+## Reproducibility and Software Environment
+
+### Software Environment
+
+- Operating system: Windows 64-bit
+- Python: 3.11.9
+- PyTorch: 2.14.1+cpu
+- Torchvision: 0.29.1+cpu
+- Scikit-learn: 1.9.1
+- Quantization backend: oneDNN (`onednn`)
+
+### Runtime Configuration
+
+- Final test evaluation: CPU with 2 PyTorch threads.
+- Calibration images: 1,024 training-subset images per quantized model.
+- Static INT8 calibration: first 1,024 images of `training_subset`.
+- Combined pruning and INT8 calibration: 1,024 indices selected using seed 42.
+- Test set: 10,000 official CIFAR-100 test images.
+
+### Reproducibility Notes
+
+Reproducing the results requires the same model architecture, checkpoint files, dataset split, preprocessing, calibration procedure, quantization backend, and compatible software versions. CPU timing may vary with hardware load and runtime conditions.
+
+## Scientific Interpretation of Compression Results
+
+### Effectiveness of Static INT8 Quantization
+
+On the official CIFAR-100 test set, static INT8 quantization reduced the serialized checkpoint size from 44,960,587 bytes to 11,355,075 bytes, a reduction of approximately 74.74%. Test accuracy decreased from 38.94% to 38.66%, a reduction of 0.28 percentage points. Measured throughput increased from 125.08 to 465.29 images per second on the tested CPU setup.
+
+These results indicate a favorable storage-accuracy trade-off under the evaluated configuration. Throughput results should be interpreted in the context of the measurement procedure and hardware.
+
+### Additional Effect of Unstructured Pruning
+
+The combined 20% pruning and static INT8 model achieved 38.71% test accuracy, compared with 38.66% for static INT8 alone. The difference was 0.05 percentage points. Throughput increased from 465.29 to 470.11 images per second, while the serialized checkpoint became 1,542 bytes larger.
+
+The observed differences are small and do not establish a meaningful practical advantage from adding unstructured pruning to static INT8 quantization in this experiment.
+
+### Limitations and Scope of Conclusions
+
+Unstructured pruning creates zero-valued weights but does not necessarily reduce serialized model size or inference time unless the storage format and execution method exploit sparsity.
+
+The reported checkpoint sizes refer to the saved state dictionaries, not necessarily the complete storage or memory requirements of a deployed application. Throughput measurements are specific to the tested CPU environment and measurement procedure.
+
+The current results support conclusions about the evaluated models and configuration. Further controlled repeated measurements would be needed to establish the reliability of small throughput differences or generalize the findings to other hardware.
